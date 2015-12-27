@@ -8,33 +8,35 @@ import scala.util.Random
   */
 
 
-trait OnePointCrossover {
+trait OnePointCrossover[T, IndividualType <: GAIndividual[T]] {
 
-  def crossover(parent1: IndexedSeq[Int], parent2: IndexedSeq[Int]): IndexedSeq[Int] = {
-    val point = Random.nextInt(parent1.length)
-    val parts1 = parent1.splitAt(point)
-    val parts2 = parent2.splitAt(point)
-    Random.shuffle((parts1._1 ++ parts2._2) ::
-      (parts2._1 ++ parts1._2) :: Nil).head
+  def toIndividual(head: IndexedSeq[T]): IndividualType
+
+  def crossover(parent1: IndividualType, parent2: IndividualType): IndividualType = {
+    val point = Random.nextInt(parent1.chromozome.length)
+    val parts1 = parent1.chromozome.splitAt(point)
+    val parts2 = parent1.chromozome.splitAt(point)
+
+
+    toIndividual(Random.shuffle((parts1._1 ++ parts2._2) ::
+      (parts2._1 ++ parts1._2) :: Nil).head)
   }
 
 }
 
-trait TournamentSelection {
+trait TournamentSelection[IndividualType <: GAIndividual[_]] {
 
   val tournamentSize: Int
 
-  def fitness(individual: IndexedSeq[Int]): Int
-
-  def selectParent(population: Seq[IndexedSeq[Int]]): IndexedSeq[Int] = {
+  def selectParent(population: Seq[IndividualType]): IndividualType = {
     @tailrec
-    def selectParentRec(recPopulation: IndexedSeq[IndexedSeq[Int]],
-                        best: IndexedSeq[Int], round: Int): IndexedSeq[Int] = {
+    def selectParentRec(recPopulation: IndexedSeq[IndividualType],
+                        best: IndividualType, round: Int): IndividualType = {
       if (round == tournamentSize) {
         return best
       }
       val candidate = recPopulation(Random.nextInt(recPopulation.length))
-      selectParentRec(recPopulation, if (fitness(candidate) > fitness(best)) candidate else best,
+      selectParentRec(recPopulation, if (candidate.fitness > best.fitness) candidate else best,
       round + 1)
     }
     selectParentRec(population.toIndexedSeq,
@@ -43,36 +45,30 @@ trait TournamentSelection {
   }
 }
 
-trait RandomPrune {
-  val initialPopulation: Int
-  def prune(population: Seq[IndexedSeq[Int]]) : Seq[IndexedSeq[Int]] = {
-    Random.shuffle(population).take(initialPopulation)
-  }
+trait GAIndividual[U] {
+  val chromozome: IndexedSeq[U]
+  val fitness: Int
 }
 
-trait GAIndividual[T <: Ordered[T]] {
-  def fitness(): T
-}
-
-abstract class GeneticAlgorithm[InstanceType, SolutionType](problemInstance: InstanceType,
+abstract class GeneticAlgorithm[InstanceType, IndividualType <: GAIndividual[_], SolutionType](problemInstance: InstanceType,
                                                             initialPopulation: Int,
                                                             maxGeneration: Int) {
 
-  def generateRandomVector(): IndexedSeq[Int]
+  def generateRandomVector(): IndividualType
 
-  def toSolution(value: IndexedSeq[Int]): SolutionType
+  def toSolution(value: IndividualType): SolutionType
 
-  def crossover(parent1: IndexedSeq[Int], parent2: IndexedSeq[Int]): IndexedSeq[Int]
+  def crossover(parent1: IndividualType, parent2: IndividualType): IndividualType
 
-  def mutate(individual: IndexedSeq[Int]): IndexedSeq[Int]
+  def mutate(individual: IndividualType): IndividualType
 
-  def selectParent(population: Seq[IndexedSeq[Int]]): IndexedSeq[Int]
+  def selectParent(population: Seq[IndividualType]): IndividualType
 
-  def prune(population: Seq[IndexedSeq[Int]]) : Seq[IndexedSeq[Int]]
+  def prune(population: Seq[IndividualType]) : Seq[IndividualType]
 
   @tailrec
-  final def runOnGeneration(generation: Int, bestSolution: IndexedSeq[Int],
-                            population: Seq[IndexedSeq[Int]]): IndexedSeq[Int] = {
+  final def runOnGeneration(generation: Int, bestSolution: IndividualType,
+                            population: Seq[IndividualType]): IndividualType = {
     if (generation == maxGeneration) {
       return bestSolution
     }
@@ -84,7 +80,7 @@ abstract class GeneticAlgorithm[InstanceType, SolutionType](problemInstance: Ins
     val pruned = prune(population ++ children)
     val bestChildSolution = getTop(pruned)
     runOnGeneration(generation + 1,
-      if (fitness(bestSolution) > fitness(bestChildSolution)) bestSolution else bestChildSolution,
+      if (bestSolution.fitness > bestChildSolution.fitness) bestSolution else bestChildSolution,
       pruned)
   }
 
@@ -95,11 +91,9 @@ abstract class GeneticAlgorithm[InstanceType, SolutionType](problemInstance: Ins
     toSolution(runOnGeneration(0, getTop(population), population))
   }
 
-  def fitness(individual: IndexedSeq[Int]): Int
-
-  def getTop(list: Seq[IndexedSeq[Int]]): IndexedSeq[Int] = {
-    list.reduce((left, right) => {
-      if (fitness(left) > fitness(right)) {
+  def getTop(list: Seq[IndividualType]): IndividualType = {
+    list.reduceLeft((left, right) => {
+      if (left.fitness > right.fitness) {
         left
       } else {
         right

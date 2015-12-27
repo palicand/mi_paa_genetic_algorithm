@@ -1,6 +1,6 @@
 package cz.cvut.fit.palicand.knapsack.algorithms.evolution
 
-import cz.cvut.fit.palicand.knapsack.algorithms.{RandomPrune, TournamentSelection, GeneticAlgorithm, OnePointCrossover}
+import cz.cvut.fit.palicand.knapsack.algorithms._
 import cz.cvut.fit.palicand.knapsack.{KnapsackInstance, KnapsackSolution}
 
 import scala.annotation.tailrec
@@ -10,28 +10,16 @@ import scala.util.Random
   * Created by palickaa on 18/12/15.
   */
 
-case class EvolutionEntity(instance: KnapsackInstance, chromozome: Seq[Boolean]) extends Ordered [EvolutionEntity]{
-  def fitness(): Int = {
-    chromozome.zip(instance.items).filter({ case (gene, (_, _)) =>
-      gene
-    }).foldLeft(0) { (intermediateValue, item) => {
-      item match {
-        case (_, (_, price)) => {
-          intermediateValue + price
-        }
-      }
-    }
-    }
+case class KnapsackIndividual(instance: KnapsackInstance, chromozome: IndexedSeq[Int]) extends GAIndividual[Int] {
+  private lazy val solution: KnapsackSolution = {
+    new KnapsackSolution(instance, chromozome)
+  }
+  lazy val fitness: Int = {
+    solution.prices
   }
 
-  override def compare(that: EvolutionEntity): Int = {
-    if(this.fitness == that.fitness) {
-      0
-    } else if (fitness < that.fitness) {
-      -1
-    } else {
-      1
-    }
+  lazy val weight: Int = {
+    solution.weights
   }
 }
 
@@ -46,50 +34,51 @@ case class KnapsackGeneticAlgorithm(problemInstance: KnapsackInstance,
                                       initialPopulation: Int,
                                       maxGeneration: Int,
                                       tournamentSize: Int,
-                                      mutationChance: Double) extends GeneticAlgorithm[KnapsackInstance, KnapsackSolution](problemInstance,
+                                      mutationChance: Double) extends GeneticAlgorithm[KnapsackInstance, KnapsackIndividual, KnapsackSolution](problemInstance,
   initialPopulation,
-  maxGeneration) with TournamentSelection with OnePointCrossover with RandomPrune {
-  def generateRandomVector() : IndexedSeq[Int] = {
+  maxGeneration) with TournamentSelection[KnapsackIndividual] with OnePointCrossover[Int, KnapsackIndividual] {
+  def generateRandomVector() : KnapsackIndividual = {
     var intermediateWeight = 0
-    problemInstance.items.map { case (weight, price) =>
+    toIndividual(problemInstance.items.map { case (weight, price) =>
       if(Random.nextBoolean() && (intermediateWeight + weight <= problemInstance.capacity)) {
         intermediateWeight += weight
         1
       } else {
         0
       }
-    }
+    })
   }
 
-  override def toSolution(value: IndexedSeq[Int]): KnapsackSolution = {
-    new KnapsackSolution(problemInstance, value)
+  override def toSolution(value: KnapsackIndividual): KnapsackSolution = {
+    new KnapsackSolution(problemInstance, value.chromozome)
   }
 
-  override def fitness(individual: IndexedSeq[Int]): Int = {
-    toSolution(individual).prices
-  }
-
-  override def prune(population: Seq[IndexedSeq[Int]]) : Seq[IndexedSeq[Int]] = {
+  override def prune(population: Seq[KnapsackIndividual]) : Seq[KnapsackIndividual] = {
     Random.shuffle(population.filter { (individual) =>
-      toSolution(individual).weights <= problemInstance.capacity
-    }).take(initialPopulation)
+      individual.weight <= problemInstance.capacity
+    }).sortBy((individual) => individual.fitness)(Ordering[Int].reverse).take(initialPopulation)
+  }
+
+  override def toIndividual(chromozome: IndexedSeq[Int]): KnapsackIndividual = {
+    new KnapsackIndividual(problemInstance, chromozome)
   }
 
 
   @tailrec
-  final def mutate(individual: IndexedSeq[Int]): IndexedSeq[Int] = {
+  final def mutate(individual: KnapsackIndividual): KnapsackIndividual = {
     if (Random.nextDouble() <= mutationChance) {
-      val pos = Random.nextInt(individual.length)
+      val pos = Random.nextInt(individual.chromozome.length)
 
-      if (individual(pos) == 0) {
-        val mutated = individual.take(pos) ++ IndexedSeq(1) ++ individual.drop(pos + 1)
-        if (toSolution(mutated).weights <= problemInstance.capacity) {
-          mutated
+      if (individual.chromozome(pos) == 0) {
+        val mutated = individual.chromozome.take(pos) ++ IndexedSeq(1) ++ individual.chromozome.drop(pos + 1)
+        val mutatedIndividual = toIndividual(mutated.toIndexedSeq)
+        if (mutatedIndividual.weight <= problemInstance.capacity) {
+          mutatedIndividual
         } else {
           mutate(individual)
         }
       } else {
-        individual.take(pos) ++ IndexedSeq(0) ++ individual.drop(pos + 1)
+        toIndividual(individual.chromozome.take(pos) ++ IndexedSeq(0) ++ individual.chromozome.drop(pos + 1))
       }
     } else {
       individual

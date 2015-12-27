@@ -23,7 +23,7 @@ object KnapsackEvA {
           scala.io.Source.fromFile(solution + "/" + solutionFile).getLines.toSeq)
     }
     val solved = instances.map { (instance) =>
-      val algorithm = new KnapsackGeneticAlgorithm(instance, 10 * instance.size, 100, 2, 0.04)
+      val algorithm = new KnapsackGeneticAlgorithm(instance, 50 * instance.size, 200, 2, 0.04)
       val solution = algorithm.solve()
       println((solution.instance.controlValue - solution.prices).toDouble / solution.instance.controlValue.toDouble)
       solution
