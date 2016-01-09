@@ -1,0 +1,16 @@
+<configuration>
+    <appender name="File" class="ch.qos.logback.core.FileAppender">
+        <file>
+            output.log
+        </file>
+        <encoder>
+            <pattern>
+                %msg%n
+            </pattern>
+        </encoder>
+    </appender>
+
+    <root level="debug">
+        <appender-ref ref="File" />
+    </root>
+</configuration>

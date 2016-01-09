@@ -1,5 +1,7 @@
 package cz.cvut.fit.palicand.knapsack.algorithms
 
+import com.typesafe.scalalogging.LazyLogging
+
 import scala.annotation.tailrec
 import scala.util.Random
 
@@ -18,10 +20,11 @@ trait OnePointCrossover[T, IndividualType <: GAIndividual[T]] {
     val parts2 = parent1.chromozome.splitAt(point)
 
 
-    toIndividual(Random.shuffle((parts1._1 ++ parts2._2) ::
-      (parts2._1 ++ parts1._2) :: Nil).head)
+    Random.shuffle(toIndividual(parts1._1 ++ parts2._2) ::
+      toIndividual(parts2._1 ++ parts1._2) :: Nil).head
   }
 
+  def getTop(list: Seq[IndividualType]): IndividualType
 }
 
 trait TournamentSelection[IndividualType <: GAIndividual[_]] {
@@ -37,7 +40,7 @@ trait TournamentSelection[IndividualType <: GAIndividual[_]] {
       }
       val candidate = recPopulation(Random.nextInt(recPopulation.length))
       selectParentRec(recPopulation, if (candidate.fitness > best.fitness) candidate else best,
-      round + 1)
+        round + 1)
     }
     selectParentRec(population.toIndexedSeq,
       population.toIndexedSeq(Random.nextInt(population.length)),
@@ -51,8 +54,9 @@ trait GAIndividual[U] {
 }
 
 abstract class GeneticAlgorithm[InstanceType, IndividualType <: GAIndividual[_], SolutionType](problemInstance: InstanceType,
-                                                            initialPopulation: Int,
-                                                            maxGeneration: Int) {
+                                                                                               initialPopulation: Int,
+                                                                                               maxGeneration: Int,
+                                                                                               maxEqual: Int) extends LazyLogging {
 
   def generateRandomVector(): IndividualType
 
@@ -64,23 +68,26 @@ abstract class GeneticAlgorithm[InstanceType, IndividualType <: GAIndividual[_],
 
   def selectParent(population: Seq[IndividualType]): IndividualType
 
-  def prune(population: Seq[IndividualType]) : Seq[IndividualType]
+  def prune(population: Seq[IndividualType]): Seq[IndividualType]
+
+  def selectBreedingPopulation(population: Seq[IndividualType]) : Seq[IndividualType]
 
   @tailrec
-  final def runOnGeneration(generation: Int, bestSolution: IndividualType,
+  final def runOnGeneration(generation: Int, bestSolutions: Seq[IndividualType],
                             population: Seq[IndividualType]): IndividualType = {
-    if (generation == maxGeneration) {
-      return bestSolution
+    if (generation == maxGeneration || generation > maxEqual && bestSolutions.take(maxEqual).forall { (individual) => individual.fitness == bestSolutions.head.fitness }) {
+      return bestSolutions.head
     }
-
-    val children = population.indices.map { (child) =>
-      val child = crossover(selectParent(population), selectParent(population))
-      mutate(child)
+    val selectedForBreeding = selectBreedingPopulation(population)
+    val children = selectedForBreeding.map { (parent) =>
+      crossover(parent, selectParent(selectedForBreeding))
     }
-    val pruned = prune(population ++ children)
+    val pruned = prune(population ++ children).map(mutate)
     val bestChildSolution = getTop(pruned)
+    val bestSoFar = if (bestSolutions.head.fitness > bestChildSolution.fitness) bestSolutions.head else bestChildSolution
+    logger.info(s"Generation $generation - ${bestChildSolution.fitness} ")
     runOnGeneration(generation + 1,
-      if (bestSolution.fitness > bestChildSolution.fitness) bestSolution else bestChildSolution,
+      bestSoFar +: bestSolutions,
       pruned)
   }
 
@@ -88,7 +95,7 @@ abstract class GeneticAlgorithm[InstanceType, IndividualType <: GAIndividual[_],
     val population = (0 until initialPopulation).map { (_) =>
       generateRandomVector()
     }
-    toSolution(runOnGeneration(0, getTop(population), population))
+    toSolution(runOnGeneration(0, getTop(population) :: Nil, population))
   }
 
   def getTop(list: Seq[IndividualType]): IndividualType = {

@@ -34,9 +34,10 @@ case class KnapsackGeneticAlgorithm(problemInstance: KnapsackInstance,
                                       initialPopulation: Int,
                                       maxGeneration: Int,
                                       tournamentSize: Int,
-                                      mutationChance: Double) extends GeneticAlgorithm[KnapsackInstance, KnapsackIndividual, KnapsackSolution](problemInstance,
+                                      mutationChance: Double,
+                                      maxEqual: Int) extends GeneticAlgorithm[KnapsackInstance, KnapsackIndividual, KnapsackSolution](problemInstance,
   initialPopulation,
-  maxGeneration) with TournamentSelection[KnapsackIndividual] with OnePointCrossover[Int, KnapsackIndividual] {
+  maxGeneration, maxEqual) with TournamentSelection[KnapsackIndividual] with OnePointCrossover[Int, KnapsackIndividual] {
   def generateRandomVector() : KnapsackIndividual = {
     var intermediateWeight = 0
     toIndividual(problemInstance.items.map { case (weight, price) =>
@@ -54,9 +55,10 @@ case class KnapsackGeneticAlgorithm(problemInstance: KnapsackInstance,
   }
 
   override def prune(population: Seq[KnapsackIndividual]) : Seq[KnapsackIndividual] = {
-    Random.shuffle(population.filter { (individual) =>
-      individual.weight <= problemInstance.capacity
-    }).sortBy((individual) => individual.fitness)(Ordering[Int].reverse).take(initialPopulation)
+   val filtered = population.filter {_.weight <= problemInstance.capacity
+    }.sortBy {_.fitness}(Ordering[Int].reverse)
+    val pruned = filtered.take(initialPopulation / 3) ++ filtered.reverse.take(initialPopulation / 3)
+    pruned ++ (pruned.length to initialPopulation).map(_ =>generateRandomVector())
   }
 
   override def toIndividual(chromozome: IndexedSeq[Int]): KnapsackIndividual = {
@@ -64,9 +66,10 @@ case class KnapsackGeneticAlgorithm(problemInstance: KnapsackInstance,
   }
 
 
-  @tailrec
-  final def mutate(individual: KnapsackIndividual): KnapsackIndividual = {
-    if (Random.nextDouble() <= mutationChance) {
+  def mutate(individual: KnapsackIndividual): KnapsackIndividual = {
+
+    @tailrec
+    def mutateRec(individual: KnapsackIndividual): KnapsackIndividual = {
       val pos = Random.nextInt(individual.chromozome.length)
 
       if (individual.chromozome(pos) == 0) {
@@ -75,13 +78,20 @@ case class KnapsackGeneticAlgorithm(problemInstance: KnapsackInstance,
         if (mutatedIndividual.weight <= problemInstance.capacity) {
           mutatedIndividual
         } else {
-          mutate(individual)
+          mutateRec(individual)
         }
       } else {
         toIndividual(individual.chromozome.take(pos) ++ IndexedSeq(0) ++ individual.chromozome.drop(pos + 1))
       }
+    }
+    if (Random.nextDouble() <= mutationChance) {
+      mutateRec(individual)
     } else {
       individual
     }
+  }
+
+  override def selectBreedingPopulation(population: Seq[KnapsackIndividual]): Seq[KnapsackIndividual] = {
+    population
   }
 }
