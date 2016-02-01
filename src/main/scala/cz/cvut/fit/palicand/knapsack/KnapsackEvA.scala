@@ -40,7 +40,6 @@ object KnapsackEvA extends LazyLogging {
       }
       size -> solutions
     }
-
   }
 
   def getFileNames(instanceFiles: Seq[String], solutionFiles: Seq[String]): Iterable[(String, String)] = {

@@ -1,4 +1,4 @@
-package cz.cvut.fit.palicand.knapsack.algorithms
+package cz.cvut.fit.palicand.algorithms
 
 import com.typesafe.scalalogging.LazyLogging
 
@@ -82,9 +82,10 @@ abstract class GeneticAlgorithm[InstanceType, IndividualType <: GAIndividual[_],
     val children = selectedForBreeding.map { (parent) =>
       crossover(parent, selectParent(selectedForBreeding))
     }
-    val pruned = prune(population ++ children).map(mutate)
+
+    val pruned = prune((population ++ children).map(mutate))
     val bestChildSolution = getTop(pruned)
-    val bestSoFar = if (bestSolutions.head.fitness > bestChildSolution.fitness) bestSolutions.head else bestChildSolution
+    val bestSoFar = if (bestSolutions.nonEmpty && bestSolutions.head.fitness > bestChildSolution.fitness) bestSolutions.head else bestChildSolution
     logger.info(s"Generation $generation - ${bestChildSolution.fitness} ")
     runOnGeneration(generation + 1,
       bestSoFar +: bestSolutions,
@@ -95,7 +96,7 @@ abstract class GeneticAlgorithm[InstanceType, IndividualType <: GAIndividual[_],
     val population = (0 until initialPopulation).map { (_) =>
       generateRandomVector()
     }
-    toSolution(runOnGeneration(0, getTop(population) :: Nil, population))
+    toSolution(runOnGeneration(0, List.empty[IndividualType], population))
   }
 
   def getTop(list: Seq[IndividualType]): IndividualType = {

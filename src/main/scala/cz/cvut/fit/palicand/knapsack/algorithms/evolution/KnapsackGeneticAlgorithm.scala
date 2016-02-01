@@ -1,6 +1,6 @@
 package cz.cvut.fit.palicand.knapsack.algorithms.evolution
 
-import cz.cvut.fit.palicand.knapsack.algorithms._
+import cz.cvut.fit.palicand.algorithms._
 import cz.cvut.fit.palicand.knapsack.{KnapsackInstance, KnapsackSolution}
 
 import scala.annotation.tailrec
